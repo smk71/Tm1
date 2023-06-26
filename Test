@@ -1,0 +1,88 @@
+import json
+import requests
+
+# Set the credentials for TM1 Basic Authentication
+tm1Username = 'your-tm1-username'
+tm1Password = 'your-tm1-password'
+
+# Set the credentials for "api1" client ID and client secret
+api1ClientId = 'your-api1-client-id'
+api1ClientSecret = 'your-api1-client-secret'
+
+# Obtain an access token from "api1" using client ID and client secret
+api1TokenUrl = 'https://api1.com/token'
+api1TokenPayload = {
+    'grant_type': 'client_credentials',
+    'client_id': api1ClientId,
+    'client_secret': api1ClientSecret,
+}
+
+# Make request to get the access token
+api1TokenResponse = requests.post(api1TokenUrl, data=api1TokenPayload)
+
+if api1TokenResponse.ok:
+    api1AccessToken = api1TokenResponse.json().get('access_token')
+
+    # Make request to "api1" with access token
+    api1Url = 'https://api1.com/data'
+    authHeaders = {
+        'Authorization': f'Bearer {api1AccessToken}',
+    }
+
+    response = requests.get(api1Url, headers=authHeaders)
+
+    if response.ok:
+        # Extract data from "api1" response
+        extractedData = response.json().get('data')
+
+        # Store the extracted data in variables
+        pm.variables.set('extractedData', json.dumps(extractedData))
+
+        # Generating the TM1 request body using variables
+        tm1RequestBody = {
+            'Data': {
+                'Cells': [
+                    {
+                        'Tuple': {
+                            'Dimensions': [
+                                {
+                                    'Name': 'dimensionName1',
+                                    'Elements': [
+                                        {
+                                            'Name': dataItem['dimensionName1'],
+                                        }
+                                    ]
+                                },
+                                {
+                                    'Name': 'dimensionName2',
+                                    'Elements': [
+                                        {
+                                            'Name': dataItem['dimensionName2'],
+                                        }
+                                    ]
+                                }
+                                # Add more dimensions and their corresponding values as needed
+                            ]
+                        },
+                        'Value': dataItem['value']
+                    }
+                    for dataItem in extractedData
+                ]
+            },
+            'CubeName': 'data cube'  # Specify the cube name here
+        }
+
+        # Making the TM1 request with Basic Authentication
+        tm1ImportUrl = 'https://your-tm1-server/import-endpoint'
+        tm1ImportPayload = json.dumps(tm1RequestBody)
+
+        # Use Basic Authentication for TM1 server
+        tm1Auth = requests.auth.HTTPBasicAuth(tm1Username, tm1Password)
+
+        # Importing response from the first part to TM1
+        tm1Response = requests.post(tm1ImportUrl, auth=tm1Auth, headers={'Content-Type': 'application/json'}, data=tm1ImportPayload)
+        print(tm1Response.text)
+    else:
+        print(f'Failed to retrieve data from "api1": {response.status_code}')
+else:
+    print('Failed to obtain access token from "api1"')
